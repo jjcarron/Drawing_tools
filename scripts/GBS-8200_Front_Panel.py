@@ -82,7 +82,7 @@ def build_config() -> DrawingConfig:
 def build_output_path(output_dir: Path) -> Path:
     """Return the output .dxf file path."""
 
-    return output_dir / "RGBS2VGA_Front_Panel.dxf"
+    return output_dir / "GBS-8200_Front_Panel.dxf"
 
 
 def to_lineweight_hundredths(lineweight_mm: float) -> int:
@@ -486,7 +486,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("output"),
+        default=Path("projets/GBS-8200/output"),
         help="Directory where the DXF file will be written.",
     )
     parser.add_argument(

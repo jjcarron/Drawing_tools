@@ -33,3 +33,4 @@
 31. Added a DXF-to-SVG export tool for laser cutting/engraving that outputs selected layers to SVG.
 32. Adjusted DXF-to-SVG export to render text with fill color so TEXT layers appear in SVG.
 33. Set engrave preset to OUTLINE + TEXT and added text-to-path export for laser-friendly SVGs.
+34. Moved the front panel spec into projets/GBS-8200, updated the generator/output naming to GBS-8200, and refreshed README and spec details to match the current DXF.
