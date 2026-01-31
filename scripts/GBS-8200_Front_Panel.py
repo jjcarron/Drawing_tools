@@ -14,8 +14,16 @@ os.environ.setdefault("XDG_CACHE_HOME", str(CACHE_ROOT))
 
 import ezdxf
 from ezdxf.enums import TextEntityAlignment
-from ezdxf.math import Vec2
-from ezdxf import bbox
+
+from dxf_template import (
+    TitleBlockFields,
+    apply_title_block_fields,
+    center_entities_on_sheet,
+    ensure_linetype,
+    fit_layout_to_free_area,
+    find_border_bbox,
+    load_template,
+)
 
 
 @dataclass(frozen=True)
@@ -43,17 +51,6 @@ class DrawingConfig:
     axis_lineweight_mm: float
     text_height_mm: float
     dim_offset_mm: float
-
-
-@dataclass(frozen=True)
-class TitleBlockFields:
-    """Text fields to place in the title block template."""
-
-    title: str
-    document_type: str
-    drawing_number: str
-    issue_date: str
-    material: str
 
 
 def build_spec() -> PanelSpec:
@@ -112,20 +109,6 @@ def to_lineweight_hundredths(lineweight_mm: float) -> int:
     return max(0, int(round(lineweight_mm * 100.0)))
 
 
-def ensure_linetype(doc: ezdxf.EzDXF, name: str) -> None:
-    """Ensure the custom symmetry axis linetype exists."""
-
-    if name in doc.linetypes:
-        linetype = doc.linetypes.get(name)
-        linetype.pattern = [15.0, 6.0, -1.5, 0.0, -1.5, 6.0]
-        return
-
-    # Fallback dash-dot pattern if template does not define it.
-    doc.linetypes.add(
-        name,
-        pattern=[15.0, 6.0, -1.5, 0.0, -1.5, 6.0],
-        description="Symmetry axis dash-dot 6-1.5-0-1.5-6",
-    )
 
 
 def setup_layers(doc: ezdxf.EzDXF, config: DrawingConfig) -> dict[str, str]:
@@ -410,62 +393,6 @@ def add_text_annotations(
     text.set_placement((circle_center_x, bottom_y), align=TextEntityAlignment.MIDDLE_CENTER)
 
 
-def fit_layout_to_free_area(layout: ezdxf.layouts.Layout, free_box: bbox.BoundingBox) -> None:
-    """Fit the layout viewport to the free sheet area bounding box."""
-
-    if not free_box.has_data:
-        return
-
-    viewport = layout.main_viewport()
-    if viewport is None:
-        layout.reset_main_viewport(Vec2(free_box.center), Vec2(free_box.size) * 1.02)
-        return
-
-    width = float(viewport.dxf.width)
-    height = float(viewport.dxf.height)
-    if width <= 0 or height <= 0:
-        layout.reset_main_viewport(Vec2(free_box.center), Vec2(free_box.size) * 1.02)
-        return
-
-    aspect = width / height
-    view_height = max(free_box.size.y, free_box.size.x / aspect) * 1.02
-    viewport.dxf.view_center_point = (float(free_box.center.x), float(free_box.center.y))
-    viewport.dxf.view_height = view_height
-
-
-def find_border_bbox(msp: ezdxf.layouts.Modelspace) -> bbox.BoundingBox:
-    """Find the drawing border bounding box from the template."""
-
-    border_entities = [e for e in msp if e.dxf.layer == "Border"]
-    border_box = bbox.extents(border_entities, fast=True)
-    if not border_box.has_data:
-        border_box = bbox.extents(msp, fast=True)
-    return border_box
-
-
-def center_entities_on_sheet(
-    msp: ezdxf.layouts.Modelspace, drawing_entities: list[ezdxf.entities.DXFGraphic]
-) -> bbox.BoundingBox:
-    """Translate drawing entities to center them on the sheet."""
-
-    drawing_box = bbox.extents(drawing_entities, fast=True)
-    if not drawing_box.has_data:
-        return bbox.BoundingBox()
-
-    border_box = find_border_bbox(msp)
-    if not border_box.has_data:
-        return bbox.BoundingBox()
-
-    target_center = border_box.center
-    delta = target_center - drawing_box.center
-    if delta.is_null:
-        return border_box
-
-    for entity in drawing_entities:
-        entity.translate(delta.x, delta.y, 0.0)
-    return border_box
-
-
 def create_drawing(
     output_path: Path,
     spec: PanelSpec,
@@ -474,14 +401,9 @@ def create_drawing(
 ) -> None:
     """Create and save the DXF drawing."""
 
-    existing_handles: set[str] = set()
-    if template_path and template_path.exists():
-        doc = ezdxf.readfile(template_path)
-        existing_handles = {e.dxf.handle for e in doc.modelspace()}
-    else:
-        if template_path:
-            print(f"Template not found, using blank DXF: {template_path}")
-        doc = ezdxf.new(dxfversion="R2010")
+    doc, existing_handles = load_template(template_path)
+    if template_path and not template_path.exists():
+        print(f"Template not found, using blank DXF: {template_path}")
 
     doc.units = ezdxf.units.MM
     doc.header["$LTSCALE"] = 1.0
@@ -522,28 +444,6 @@ def create_drawing(
     doc.saveas(output_path)
 
 
-def apply_title_block_fields(doc: ezdxf.EzDXF, fields: TitleBlockFields) -> None:
-    """Replace placeholder title block values in the template."""
-
-    replacements: dict[str, str] = {}
-    if fields.title:
-        replacements["ISO 5457 template"] = fields.title
-    if fields.document_type:
-        replacements["Component Drawing"] = fields.document_type
-    if fields.drawing_number:
-        replacements["DN"] = fields.drawing_number
-    if fields.issue_date:
-        replacements["DD-MM-YYYY"] = fields.issue_date
-        replacements["YYYY-MM-DD"] = fields.issue_date
-    if fields.material:
-        replacements["<Material>"] = fields.material
-
-    for entity in doc.modelspace():
-        if entity.dxftype() != "TEXT":
-            continue
-        text_value = entity.dxf.text
-        if text_value in replacements:
-            entity.dxf.text = replacements[text_value]
 
 
 def parse_args() -> argparse.Namespace:

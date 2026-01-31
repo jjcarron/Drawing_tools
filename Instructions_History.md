@@ -40,3 +40,4 @@
 38. Added title block field replacement (Title, Document Type, Drawing number, Issue date, Material) using template placeholders.
 39. Added a dedicated cartouche section in the GBS-8200 spec and ensured title block fields are only replaced when provided, using the DN placeholder for drawing number.
 40. Set the issue date field to the current date at runtime (DD.MM.YYYY) for the title block.
+41. Extracted reusable DXF template utilities (template loading, linetypes, cartouche fields, centering) into scripts/dxf_template.py for reuse across drawings.
