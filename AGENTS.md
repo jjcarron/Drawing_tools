@@ -32,3 +32,5 @@ This folder is not a Git repository, so there is no commit history to infer conv
 - Generate `.xdf` output in `output/` and the matching Python script in `scripts/`.
 - Maintain symmetry axes and dimensions per the documented drawing conventions in `README.md`.
 - Record new instructions in `Instructions_History.md` with numbered, human-readable entries.
+- Center drawings vertically within the free sheet area by excluding the 60 mm cartouche height; compute from the template border extents and round the center Y to the nearest millimeter.
+- Always draw vertical and horizontal symmetry axes through each circular hole (for drilling), and ensure dimension lines attach to axes instead of floating in space.

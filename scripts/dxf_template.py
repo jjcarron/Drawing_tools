@@ -84,6 +84,23 @@ def find_border_bbox(msp: ezdxf.layouts.Modelspace) -> bbox.BoundingBox:
     return border_box
 
 
+def find_free_area_bbox(
+    msp: ezdxf.layouts.Modelspace, cartouche_height_mm: float = 60.0
+) -> bbox.BoundingBox:
+    """Find the free drawing area (exclude the cartouche height at the bottom)."""
+
+    border_box = find_border_bbox(msp)
+    if not border_box.has_data:
+        return border_box
+
+    min_x, min_y, _ = border_box.extmin
+    max_x, max_y, _ = border_box.extmax
+    free_min_y = min_y + cartouche_height_mm
+    if free_min_y >= max_y:
+        return border_box
+    return bbox.BoundingBox([(min_x, free_min_y), (max_x, max_y)])
+
+
 def center_entities_on_sheet(
     msp: ezdxf.layouts.Modelspace,
     drawing_entities: Iterable[ezdxf.entities.DXFGraphic],
@@ -94,18 +111,19 @@ def center_entities_on_sheet(
     if not drawing_box.has_data:
         return bbox.BoundingBox()
 
-    border_box = find_border_bbox(msp)
-    if not border_box.has_data:
+    free_box = find_free_area_bbox(msp)
+    if not free_box.has_data:
         return bbox.BoundingBox()
 
-    target_center = border_box.center
+    free_center = free_box.center
+    target_center = Vec2(free_center.x, round(free_center.y))
     delta = target_center - drawing_box.center
     if delta.is_null:
-        return border_box
+        return free_box
 
     for entity in drawing_entities:
         entity.translate(delta.x, delta.y, 0.0)
-    return border_box
+    return free_box
 
 
 def apply_title_block_fields(doc: ezdxf.EzDXF, fields: TitleBlockFields) -> None:

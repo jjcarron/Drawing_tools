@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -24,6 +25,20 @@ from dxf_template import (
     find_border_bbox,
     load_template,
 )
+
+DIMENSION_KEYS = {
+    "length": "longueur totale",
+    "width": "largeur totale",
+    "hole3_diameter": "diamètre du trou circulaire 3",
+    "hole4_diameter": "diamètre du trou circulaire 4",
+    "rect_width": "largeur de l'ouverture rectangulaire",
+    "rect_height": "hauteur de l'ouverture rectangulaire",
+    "holes13_pos": "position horizontale des trous circulaires 1 et 3",
+    "hole2_pos": "position horizontale du trou circulaire 2",
+    "hole4_pos_left": "position horizontale du trou circulaire 4 par rapport au bord gauche de la pièce",
+}
+
+AxisLimits = dict[float | str, dict[str, float | None]]
 
 
 @dataclass(frozen=True)
@@ -110,6 +125,68 @@ def build_output_path(output_dir: Path) -> Path:
     """Return the output .dxf file path."""
 
     return output_dir / "GBS-8200_Back_Panel.dxf"
+
+def parse_dimension_overrides(spec_path: Path) -> dict[str, tuple[str, float]]:
+    """Parse optional where/distance overrides from the spec file."""
+
+    overrides: dict[str, tuple[str, float]] = {}
+    if not spec_path.exists():
+        return overrides
+
+    in_cotes = False
+    for raw_line in spec_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if line.startswith("#### Cotes"):
+            in_cotes = True
+            continue
+        if in_cotes and line.startswith("###"):
+            break
+        if not in_cotes or not line.startswith("-"):
+            continue
+        if "where:" not in line or "distance:" not in line:
+            continue
+
+        label = line.split(";")[0].lstrip("-").strip().lower()
+        where_match = re.search(r"where:\s*(left|right|up|down)", line, re.IGNORECASE)
+        dist_match = re.search(r"distance:\s*([0-9.]+)", line, re.IGNORECASE)
+        if not where_match or not dist_match:
+            continue
+        where = where_match.group(1).lower()
+        distance = float(dist_match.group(1))
+
+        for key, token in DIMENSION_KEYS.items():
+            if token in label:
+                overrides[key] = (where, distance)
+                break
+
+    return overrides
+
+
+def parse_dimension_requests(spec_path: Path) -> set[str]:
+    """Return which dimension labels are requested in the spec file."""
+
+    requested: set[str] = set()
+    if not spec_path.exists():
+        return requested
+
+    in_cotes = False
+    for raw_line in spec_path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if line.startswith("#### Cotes"):
+            in_cotes = True
+            continue
+        if in_cotes and line.startswith("###"):
+            break
+        if not in_cotes or not line.startswith("-"):
+            continue
+
+        label = line.split(";")[0].lstrip("-").strip().lower()
+        for key, token in DIMENSION_KEYS.items():
+            if token in label:
+                requested.add(key)
+                break
+
+    return requested
 
 
 def to_lineweight_hundredths(lineweight_mm: float) -> int:
@@ -223,6 +300,7 @@ def add_axes(
     layers: dict[str, str],
     spec: PanelSpec,
     config: DrawingConfig,
+    axis_limits: AxisLimits | None,
 ) -> None:
     """Add symmetry axes with overhang."""
 
@@ -236,10 +314,18 @@ def add_axes(
     circle3_center_x = center_x + spec.circle3_offset_x_mm
     small_circle_center_x = spec.small_circle_center_x_mm
 
-    # Main center axes
+    # Main center axes (extend if dimension levels are above/below the plate)
+    center_top = spec.width_mm + overhang
+    center_bottom = -overhang
+    if axis_limits and axis_limits.get("center"):
+        center_limits = axis_limits["center"]
+        if center_limits.get("max") is not None:
+            center_top = max(center_top, center_limits["max"])
+        if center_limits.get("min") is not None:
+            center_bottom = min(center_bottom, center_limits["min"])
     msp.add_line(
-        (center_x, -overhang),
-        (center_x, spec.width_mm + overhang),
+        (center_x, center_bottom),
+        (center_x, center_top),
         dxfattribs={"layer": layers["axes"], "linetype": config.axis_linetype_name, "lineweight": -1},
     )
     msp.add_line(
@@ -248,19 +334,60 @@ def add_axes(
         dxfattribs={"layer": layers["axes"], "linetype": config.axis_linetype_name, "lineweight": -1},
     )
 
-    # Axes through openings (multiple vertical axes)
-    for x_pos in {
-        rect_center_x,
-        circle1_center_x,
-        circle2_center_x,
-        circle3_center_x,
-        small_circle_center_x,
-    }:
+    hole_radius = spec.circle_diameter_mm / 2.0
+    small_radius = spec.small_circle_diameter_mm / 2.0
+    short_extra = 2.0
+    default_top = center_y + hole_radius + short_extra
+    default_bottom = center_y - hole_radius - short_extra
+    default_small_top = center_y + small_radius + short_extra
+    default_small_bottom = center_y - small_radius - short_extra
+    # Axes through circular holes (short axes, extended when dimensions require)
+    for x_pos in {circle1_center_x, circle2_center_x, circle3_center_x}:
+        y1 = default_bottom
+        y2 = default_top
+        if axis_limits and x_pos in axis_limits:
+            limits = axis_limits[x_pos]
+            if limits.get("min") is not None:
+                y1 = min(y1, limits["min"])
+            if limits.get("max") is not None:
+                y2 = max(y2, limits["max"])
         msp.add_line(
-            (x_pos, -overhang),
-            (x_pos, spec.width_mm + overhang),
+            (x_pos, y1),
+            (x_pos, y2),
             dxfattribs={"layer": layers["axes"], "linetype": config.axis_linetype_name, "lineweight": -1},
         )
+        msp.add_line(
+            (x_pos - hole_radius - short_extra, center_y),
+            (x_pos + hole_radius + short_extra, center_y),
+            dxfattribs={"layer": layers["axes"], "linetype": config.axis_linetype_name, "lineweight": -1},
+        )
+
+    # Axis through small circular hole
+    y1 = default_small_bottom
+    y2 = default_small_top
+    if axis_limits and small_circle_center_x in axis_limits:
+        limits = axis_limits[small_circle_center_x]
+        if limits.get("min") is not None:
+            y1 = min(y1, limits["min"])
+        if limits.get("max") is not None:
+            y2 = max(y2, limits["max"])
+    msp.add_line(
+        (small_circle_center_x, y1),
+        (small_circle_center_x, y2),
+        dxfattribs={"layer": layers["axes"], "linetype": config.axis_linetype_name, "lineweight": -1},
+    )
+    msp.add_line(
+        (small_circle_center_x - small_radius - short_extra, center_y),
+        (small_circle_center_x + small_radius + short_extra, center_y),
+        dxfattribs={"layer": layers["axes"], "linetype": config.axis_linetype_name, "lineweight": -1},
+    )
+
+    # Axis through rectangular opening (full height)
+    msp.add_line(
+        (rect_center_x, -overhang),
+        (rect_center_x, spec.width_mm + overhang),
+        dxfattribs={"layer": layers["axes"], "linetype": config.axis_linetype_name, "lineweight": -1},
+    )
 
 
 def add_dimensions(
@@ -268,7 +395,7 @@ def add_dimensions(
     layers: dict[str, str],
     spec: PanelSpec,
     config: DrawingConfig,
-) -> None:
+) -> AxisLimits:
     """Add ISO-style dimensions for length, width, hole diameters, and offsets."""
 
     dimstyle = "ISO-25"
@@ -280,36 +407,110 @@ def add_dimensions(
     style.dxf.dimlwd = lineweight
     style.dxf.dimlwe = lineweight
 
+    spec_path = Path("projets/GBS-8200/GBS-8200_Back_Panel.md")
+    overrides = parse_dimension_overrides(spec_path)
+    requested = parse_dimension_requests(spec_path)
+    length_where, length_dist = overrides.get("length", ("down", config.dim_offset_mm))
+    width_where, width_dist = overrides.get("width", ("left", config.dim_offset_mm))
+
+    length_base_y = -length_dist if length_where == "down" else spec.width_mm + length_dist
+    width_base_x = -width_dist if width_where == "left" else spec.length_mm + width_dist
+
     # Overall length and width
     msp.add_linear_dim(
-        base=(0.0, -config.dim_offset_mm),
+        base=(0.0, length_base_y),
         p1=(0.0, 0.0),
         p2=(spec.length_mm, 0.0),
         dimstyle=dimstyle,
-        dxfattribs={"layer": layers["dimensions"], "lineweight": lineweight},
+        dxfattribs={"layer": layers["dimensions"]},
     ).render()
 
     msp.add_linear_dim(
-        base=(-config.dim_offset_mm, 0.0),
+        base=(width_base_x, 0.0),
         p1=(0.0, 0.0),
         p2=(0.0, spec.width_mm),
         angle=90.0,
         dimstyle=dimstyle,
-        dxfattribs={"layer": layers["dimensions"], "lineweight": lineweight},
+        dxfattribs={"layer": layers["dimensions"]},
     ).render()
 
     center_x = spec.length_mm / 2.0
     center_y = spec.width_mm / 2.0
 
-    # Diameter for 10 mm holes
+    # Diameter for 10 mm hole 3
     circle1_center_x = center_x + spec.circle1_offset_x_mm
-    msp.add_diameter_dim(
-        center=(circle1_center_x, center_y),
-        radius=spec.circle_diameter_mm / 2.0,
-        angle=45.0,
-        dimstyle=dimstyle,
-        dxfattribs={"layer": layers["dimensions"], "lineweight": lineweight},
-    ).render()
+    circle2_center_x = center_x + spec.circle2_offset_x_mm
+    circle3_center_x = center_x + spec.circle3_offset_x_mm
+    hole_radius = spec.circle_diameter_mm / 2.0
+    small_radius = spec.small_circle_diameter_mm / 2.0
+    if "hole3_diameter" in requested:
+        hole3_location = None
+        hole3_angle = 45.0
+        if "hole3_diameter" in overrides:
+            hole3_where, hole3_dist = overrides["hole3_diameter"]
+            if hole3_where == "right":
+                hole3_location = (circle3_center_x + hole_radius + hole3_dist, center_y)
+            elif hole3_where == "left":
+                hole3_location = (circle3_center_x - hole_radius - hole3_dist, center_y)
+            elif hole3_where == "up":
+                hole3_location = (circle3_center_x, center_y + hole_radius + hole3_dist)
+            elif hole3_where == "down":
+                hole3_location = (circle3_center_x, center_y - hole_radius - hole3_dist)
+            if hole3_location is not None:
+                hole3_angle = None
+
+        msp.add_diameter_dim(
+            center=(circle3_center_x, center_y),
+            radius=hole_radius,
+            angle=hole3_angle,
+            location=hole3_location,
+            dimstyle=dimstyle,
+            dxfattribs={"layer": layers["dimensions"]},
+        ).render()
+
+    if "hole4_diameter" in requested:
+        hole4_location = None
+        hole4_angle = 45.0
+        if "hole4_diameter" in overrides:
+            hole4_where, hole4_dist = overrides["hole4_diameter"]
+            if hole4_where == "right":
+                hole4_location = (
+                    spec.small_circle_center_x_mm + small_radius + hole4_dist,
+                    center_y,
+                )
+            elif hole4_where == "left":
+                hole4_location = (
+                    spec.small_circle_center_x_mm - small_radius - hole4_dist,
+                    center_y,
+                )
+            elif hole4_where == "up":
+                hole4_location = (
+                    spec.small_circle_center_x_mm,
+                    center_y + small_radius + hole4_dist,
+                )
+            elif hole4_where == "down":
+                hole4_location = (
+                    spec.small_circle_center_x_mm,
+                    center_y - small_radius - hole4_dist,
+                )
+            if hole4_location is not None:
+                hole4_angle = None
+        else:
+            diag_offset = (small_radius + config.dim_offset_mm) / (2.0**0.5)
+            hole4_location = (
+                spec.small_circle_center_x_mm + diag_offset,
+                center_y + diag_offset,
+            )
+            hole4_angle = None
+
+        msp.add_diameter_dim(
+            center=(spec.small_circle_center_x_mm, center_y),
+            radius=small_radius,
+            angle=hole4_angle,
+            location=hole4_location,
+            dimstyle=dimstyle,
+            dxfattribs={"layer": layers["dimensions"]},
+        ).render()
 
     # Rectangular hole width and height
     rect_center_x = center_x + spec.rect_offset_x_mm
@@ -320,40 +521,102 @@ def add_dimensions(
     rect_bottom = center_y - rect_half_h
     rect_top = center_y + rect_half_h
 
-    msp.add_linear_dim(
-        base=(rect_left, center_y + config.dim_offset_mm),
-        p1=(rect_left, center_y),
-        p2=(rect_right, center_y),
-        dimstyle=dimstyle,
-        dxfattribs={"layer": layers["dimensions"], "lineweight": lineweight},
-    ).render()
+    rect_width_where, rect_width_dist = overrides.get("rect_width", ("down", config.dim_offset_mm))
+    rect_height_where, rect_height_dist = overrides.get("rect_height", ("left", config.dim_offset_mm))
+
+    if rect_width_where == "down":
+        rect_width_base_y = rect_bottom - rect_width_dist
+        rect_width_p1 = (rect_left, rect_bottom)
+        rect_width_p2 = (rect_right, rect_bottom)
+    else:
+        rect_width_base_y = rect_top + rect_width_dist
+        rect_width_p1 = (rect_left, rect_top)
+        rect_width_p2 = (rect_right, rect_top)
 
     msp.add_linear_dim(
-        base=(rect_right + config.dim_offset_mm, rect_bottom),
-        p1=(rect_right, rect_bottom),
-        p2=(rect_right, rect_top),
+        base=(rect_left, rect_width_base_y),
+        p1=rect_width_p1,
+        p2=rect_width_p2,
+        dimstyle=dimstyle,
+        dxfattribs={"layer": layers["dimensions"]},
+    ).render()
+
+    if rect_height_where == "left":
+        rect_height_base_x = rect_left - rect_height_dist
+        rect_height_p1 = (rect_left, rect_bottom)
+        rect_height_p2 = (rect_left, rect_top)
+    else:
+        rect_height_base_x = rect_right + rect_height_dist
+        rect_height_p1 = (rect_right, rect_bottom)
+        rect_height_p2 = (rect_right, rect_top)
+
+    msp.add_linear_dim(
+        base=(rect_height_base_x, rect_bottom),
+        p1=rect_height_p1,
+        p2=rect_height_p2,
         angle=90.0,
         dimstyle=dimstyle,
-        dxfattribs={"layer": layers["dimensions"], "lineweight": lineweight},
+        dxfattribs={"layer": layers["dimensions"]},
     ).render()
 
-    # Horizontal offsets of openings from centerline
-    top_dim_y = spec.width_mm + config.dim_offset_mm
-    offsets = {
-        "circle1": center_x + spec.circle1_offset_x_mm,
-        "circle2": center_x + spec.circle2_offset_x_mm,
-        "circle3": center_x + spec.circle3_offset_x_mm,
-        "circle4": spec.small_circle_center_x_mm,
-        "rect": rect_center_x,
+    def update_limit(limit: dict[str, float | None], base_y: float) -> None:
+        if base_y >= center_y:
+            value = base_y + 2.0
+            limit["max"] = value if limit.get("max") is None else max(limit["max"], value)
+        else:
+            value = base_y - 2.0
+            limit["min"] = value if limit.get("min") is None else min(limit["min"], value)
+
+    axis_limits: dict[str, dict[str, float | None]] = {
+        "center": {"min": None, "max": None},
+        circle1_center_x: {"min": None, "max": None},
+        circle2_center_x: {"min": None, "max": None},
+        circle3_center_x: {"min": None, "max": None},
+        spec.small_circle_center_x_mm: {"min": None, "max": None},
     }
-    for x_pos in offsets.values():
+
+    def base_y_for_hole(where: str, distance: float, radius: float) -> float:
+        if where == "down":
+            return center_y - (radius + distance)
+        return center_y + (radius + distance)
+
+    holes13_where, holes13_dist = overrides.get("holes13_pos", ("up", config.dim_offset_mm))
+    holes13_base_y = base_y_for_hole(holes13_where, holes13_dist, hole_radius)
+    for x_pos in (circle1_center_x, circle3_center_x):
         msp.add_linear_dim(
-            base=(center_x, top_dim_y),
-            p1=(center_x, top_dim_y),
-            p2=(x_pos, top_dim_y),
+            base=(center_x, holes13_base_y),
+            p1=(center_x, center_y),
+            p2=(x_pos, center_y),
             dimstyle=dimstyle,
-            dxfattribs={"layer": layers["dimensions"], "lineweight": lineweight},
+            dxfattribs={"layer": layers["dimensions"]},
         ).render()
+        update_limit(axis_limits["center"], holes13_base_y)
+        update_limit(axis_limits[x_pos], holes13_base_y)
+
+    hole2_where, hole2_dist = overrides.get("hole2_pos", ("down", config.dim_offset_mm))
+    hole2_base_y = base_y_for_hole(hole2_where, hole2_dist, hole_radius)
+    msp.add_linear_dim(
+        base=(center_x, hole2_base_y),
+        p1=(center_x, center_y),
+        p2=(circle2_center_x, center_y),
+        dimstyle=dimstyle,
+        dxfattribs={"layer": layers["dimensions"]},
+    ).render()
+    update_limit(axis_limits["center"], hole2_base_y)
+    update_limit(axis_limits[circle2_center_x], hole2_base_y)
+
+    hole4_where, hole4_dist = overrides.get("hole4_pos_left", ("up", config.dim_offset_mm))
+    hole4_base_y = base_y_for_hole(hole4_where, hole4_dist, small_radius)
+    msp.add_linear_dim(
+        base=(0.0, hole4_base_y),
+        p1=(0.0, center_y),
+        p2=(spec.small_circle_center_x_mm, center_y),
+        dimstyle=dimstyle,
+        dxfattribs={"layer": layers["dimensions"]},
+    ).render()
+    update_limit(axis_limits[spec.small_circle_center_x_mm], hole4_base_y)
+
+    return axis_limits
 
 
 def add_text_annotations(
@@ -414,8 +677,8 @@ def create_drawing(
     msp = doc.modelspace()
     add_panel_outline(msp, layers, spec)
     add_openings(msp, layers, spec)
-    add_axes(msp, layers, spec, config)
-    add_dimensions(msp, layers, spec, config)
+    axis_limits = add_dimensions(msp, layers, spec, config)
+    add_axes(msp, layers, spec, config, axis_limits)
     add_text_annotations(msp, layers, spec, config, style_name)
 
     border_box = None

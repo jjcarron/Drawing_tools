@@ -35,12 +35,16 @@ Trou rectangulaire :
     - hauteur : 11 mm
     - position : le centre se situe à 30 mm à gauche du centre de la plaque
 
-#### Cotes :
+#### Cotes : (where: left|right|up|down, distance: x mm)
   - longueur totale de la plaque (147 mm)
   - largeur totale de la plaque (37 mm)
-  - diamètre des trou (10 mm) 
-  - largeur et hauteur de l'ouverture rectangulaire (31 mm x 11 mm)
-  - décalages horizontaux des centres d'ouverture par rapport à l'axe vertical central
+  - diamètre du trou circulaire 3 (10 mm) 
+  - largeur de l'ouverture rectangulaire (31 mm) ; where: down, distance: 7 mm
+  - hauteur de l'ouverture rectangulaire (11 mm) ; where: left, distance: 7 mm
+  - position horizontale des trous circulaires 1 et 3 ; where: up, distance: 7 mm
+  - position horizontale du trou circulaire 2 ; where: down, distance: 7 mm
+  - diamètre du trou circulaire 4 (5 mm)
+  - position horizontale du trou circulaire 4 par rapport au bord gauche de la pièce ; where: up, distance: 7 mm
 
 ### Annotations textuelles :
 

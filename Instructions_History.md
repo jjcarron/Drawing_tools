@@ -42,3 +42,11 @@
 40. Set the issue date field to the current date at runtime (DD.MM.YYYY) for the title block.
 41. Extracted reusable DXF template utilities (template loading, linetypes, cartouche fields, centering) into scripts/dxf_template.py for reuse across drawings.
 42. Created GBS-8200 back panel generator script based on the new specification, using shared template utilities.
+43. Created GBS-8200 ground plane generator script based on the project specification.
+44. Centered drawings vertically in the free sheet area by excluding the 60 mm cartouche region (A4 landscape: y=60..200, center y=130).
+45. Staggered back-panel dimensions in 5 mm steps to avoid overlaps and added missing 11 mm height dimension.
+46. Added axes through circular holes (both directions) and documented dimension placement override options in project specs.
+47. Implemented per-dimension where/distance overrides from spec files for ground and back panels.
+48. Updated hole axes to short crosshairs (2 mm past hole edges) and extended axes when associated dimensions require it for back/ground panels.
+49. Adjusted dimension placement to measure offsets from the referenced hole (radius + distance) and kept dimensions bylayer for consistent line weights.
+50. Corrected hole axis extents to 2 mm past hole edges and tied axis extensions to dimension locations for back and ground panels.
