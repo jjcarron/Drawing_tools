@@ -23,7 +23,14 @@ Cotes :
   - largeur et hauteur de l'ouverture rectangulaire (31 mm x 11 mm)
   - décalages horizontaux des centres d'ouverture par rapport à l'axe vertical central
 Annotations textuelles :
-    - Texte sur layer TEXT (modifié manuellement) :
-      - "GBS-8200"
-      - "VGA-Out"
-      - "5-12 V"
+    - Texte sur layer TEXT :
+      - "GBS-8200" Font: Segoe UI Semibold 9pt; Alignement sur le coin en haut à droite à 6 mm du bord de la plaque en haut à droite
+      - "VGA-Out" Font: Segoe UI Semibold 9pt; Alignement au centre, centré sur l'axe du trou rectangulaire et à 6 mm du bord inférieur de la plaque
+      - "5-12V -(o+" Font: Segoe UI Semibold 9pt; Alignement au centre, centré sur l'axe du trou circulaire et à 6 mm du bord inférieur de la plaque
+Cartouche (template, layer TEXT) :
+  - Champs à renseigner (laisser vide pour ne pas modifier) :
+    - Title : "GBS-8200_Front_Panel"
+    - Document Type : "Case Part"
+    - Drawing number : "20260131-01"
+    - Issue date : "DD.MM.YYYY"
+    - Material : "Plastic ABS"

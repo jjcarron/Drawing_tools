@@ -34,3 +34,9 @@
 32. Adjusted DXF-to-SVG export to render text with fill color so TEXT layers appear in SVG.
 33. Set engrave preset to OUTLINE + TEXT and added text-to-path export for laser-friendly SVGs.
 34. Moved the front panel spec into projets/GBS-8200, updated the generator/output naming to GBS-8200, and refreshed README and spec details to match the current DXF.
+35. Updated GBS-8200 generator text annotations to match the new spec (GBS-8200, VGA-Out, 5-12 V with specified alignments and offsets).
+36. Set GBS-8200 text style to Segoe UI Semibold at 9 pt for all annotation labels.
+37. Updated GBS-8200 text placement (top-right) and text content, and moved output default to projets/GBS-8200.
+38. Added title block field replacement (Title, Document Type, Drawing number, Issue date, Material) using template placeholders.
+39. Added a dedicated cartouche section in the GBS-8200 spec and ensured title block fields are only replaced when provided, using the DN placeholder for drawing number.
+40. Set the issue date field to the current date at runtime (DD.MM.YYYY) for the title block.

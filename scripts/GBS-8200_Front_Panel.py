@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from datetime import date
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,8 +30,6 @@ class PanelSpec:
     rectangular_hole_width_mm: float
     rectangular_hole_height_mm: float
     rectangular_hole_offset_x_mm: float
-    title_text: str
-    title_font_pt: float
 
 
 @dataclass(frozen=True)
@@ -46,6 +45,17 @@ class DrawingConfig:
     dim_offset_mm: float
 
 
+@dataclass(frozen=True)
+class TitleBlockFields:
+    """Text fields to place in the title block template."""
+
+    title: str
+    document_type: str
+    drawing_number: str
+    issue_date: str
+    material: str
+
+
 def build_spec() -> PanelSpec:
     """Return the panel specification extracted from TODO.md."""
 
@@ -58,16 +68,14 @@ def build_spec() -> PanelSpec:
         rectangular_hole_width_mm=31.0,
         rectangular_hole_height_mm=11.0,
         rectangular_hole_offset_x_mm=33.0,
-        title_text="RGBS to VGA",
-        title_font_pt=16.0,
     )
 
 
 def build_config() -> DrawingConfig:
     """Return drawing configuration values."""
 
-    # 16 pt -> 16/72 inch -> 5.64 mm
-    text_height_mm = 16.0 / 72.0 * 25.4
+    # 9 pt -> 9/72 inch -> 3.175 mm
+    text_height_mm = 9.0 / 72.0 * 25.4
     return DrawingConfig(
         axis_overhang_mm=3.0,
         axis_linetype_name="DASHDOT",
@@ -76,6 +84,19 @@ def build_config() -> DrawingConfig:
         axis_lineweight_mm=0.35,
         text_height_mm=text_height_mm,
         dim_offset_mm=8.0,
+    )
+
+
+def build_title_block_fields() -> TitleBlockFields:
+    """Return title block values from the project spec."""
+
+    today = date.today().strftime("%d.%m.%Y")
+    return TitleBlockFields(
+        title="GBS-8200_Front_Panel",
+        document_type="Case Part",
+        drawing_number="20260131-01",
+        issue_date=today,
+        material="Plastic ABS",
     )
 
 
@@ -141,9 +162,9 @@ def setup_layers(doc: ezdxf.EzDXF, config: DrawingConfig) -> dict[str, str]:
 def setup_text_style(doc: ezdxf.EzDXF) -> str:
     """Create a text style for the title."""
 
-    style_name = "TITLE"
+    style_name = "LABEL"
     if style_name not in doc.styles:
-        doc.styles.add(style_name, font="Arial.ttf")
+        doc.styles.add(style_name, font="Segoe UI Semibold.ttf")
     return style_name
 
 
@@ -341,27 +362,52 @@ def add_dimensions(
     return top_dim_y
 
 
-def add_title_text(
+def add_text_annotations(
     msp: ezdxf.layouts.Modelspace,
     layers: dict[str, str],
     spec: PanelSpec,
     config: DrawingConfig,
     style_name: str,
 ) -> None:
-    """Add the title text centered near the top of the panel."""
+    """Add text annotations for the panel."""
 
-    center_x = spec.length_mm / 2.0
-    y_pos = spec.width_mm - config.text_height_mm - 2.0
+    right_x = spec.length_mm - 6.0
+    top_y = spec.width_mm - 6.0
+    center_y = spec.width_mm / 2.0
+    bottom_y = 6.0
+
+    circle_center_x = spec.length_mm / 2.0 + spec.circular_hole_offset_x_mm
+    rect_center_x = spec.length_mm / 2.0 + spec.rectangular_hole_offset_x_mm
 
     text = msp.add_text(
-        spec.title_text,
+        "GBS-8200",
         dxfattribs={
             "layer": layers["text"],
             "style": style_name,
             "height": config.text_height_mm,
         },
     )
-    text.set_placement((center_x, y_pos), align=TextEntityAlignment.MIDDLE_CENTER)
+    text.set_placement((right_x, top_y), align=TextEntityAlignment.TOP_RIGHT)
+
+    text = msp.add_text(
+        "VGA-Out",
+        dxfattribs={
+            "layer": layers["text"],
+            "style": style_name,
+            "height": config.text_height_mm,
+        },
+    )
+    text.set_placement((rect_center_x, bottom_y), align=TextEntityAlignment.MIDDLE_CENTER)
+
+    text = msp.add_text(
+        "5-12V -(o+",
+        dxfattribs={
+            "layer": layers["text"],
+            "style": style_name,
+            "height": config.text_height_mm,
+        },
+    )
+    text.set_placement((circle_center_x, bottom_y), align=TextEntityAlignment.MIDDLE_CENTER)
 
 
 def fit_layout_to_free_area(layout: ezdxf.layouts.Layout, free_box: bbox.BoundingBox) -> None:
@@ -442,13 +488,14 @@ def create_drawing(
 
     layers = setup_layers(doc, config)
     style_name = setup_text_style(doc)
+    apply_title_block_fields(doc, build_title_block_fields())
 
     msp = doc.modelspace()
     add_panel_outline(msp, layers, spec)
     add_holes(msp, layers, spec)
     top_dim_y = add_dimensions(msp, layers, spec, config)
     add_axes(msp, layers, spec, config, top_dim_y)
-    add_title_text(msp, layers, spec, config, style_name)
+    add_text_annotations(msp, layers, spec, config, style_name)
 
     border_box = None
     border_box = None
@@ -475,6 +522,30 @@ def create_drawing(
     doc.saveas(output_path)
 
 
+def apply_title_block_fields(doc: ezdxf.EzDXF, fields: TitleBlockFields) -> None:
+    """Replace placeholder title block values in the template."""
+
+    replacements: dict[str, str] = {}
+    if fields.title:
+        replacements["ISO 5457 template"] = fields.title
+    if fields.document_type:
+        replacements["Component Drawing"] = fields.document_type
+    if fields.drawing_number:
+        replacements["DN"] = fields.drawing_number
+    if fields.issue_date:
+        replacements["DD-MM-YYYY"] = fields.issue_date
+        replacements["YYYY-MM-DD"] = fields.issue_date
+    if fields.material:
+        replacements["<Material>"] = fields.material
+
+    for entity in doc.modelspace():
+        if entity.dxftype() != "TEXT":
+            continue
+        text_value = entity.dxf.text
+        if text_value in replacements:
+            entity.dxf.text = replacements[text_value]
+
+
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments."""
 
@@ -486,7 +557,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output-dir",
         type=Path,
-        default=Path("projets/GBS-8200/output"),
+        default=Path("projets/GBS-8200"),
         help="Directory where the DXF file will be written.",
     )
     parser.add_argument(

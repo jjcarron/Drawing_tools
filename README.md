@@ -14,7 +14,7 @@ and a matching Python generator in `scripts/`.
 ### 1) DXF Generator
 Script: `scripts/GBS-8200_Front_Panel.py`
 - Reads the geometry spec in `TODO.md`
-- Outputs `projets/GBS-8200/output/GBS-8200_Front_Panel.dxf`
+- Outputs `projets/GBS-8200/GBS-8200_Front_Panel.dxf`
 - Uses default template: `templates/A4_Landscape_ISO5457_minimal.dxf`
 
 Run:
@@ -42,8 +42,8 @@ Script: `tools/dxf_layers_to_svg.py`
 
 Run:
 ```
-python tools/dxf_layers_to_svg.py projets/GBS-8200/output/GBS-8200_Front_Panel.dxf --preset cut
-python tools/dxf_layers_to_svg.py projets/GBS-8200/output/GBS-8200_Front_Panel.dxf --preset engrave
+python tools/dxf_layers_to_svg.py projets/GBS-8200/GBS-8200_Front_Panel.dxf --preset cut
+python tools/dxf_layers_to_svg.py projets/GBS-8200/GBS-8200_Front_Panel.dxf --preset engrave
 ```
 
 ## Workflow to Create a New Drawing
