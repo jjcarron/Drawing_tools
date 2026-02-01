@@ -16,6 +16,7 @@ sheet:
 
 styles:
   layers:
+    background: { name: BACKGROUND, lineweight: 0.0, color: "#a0a0a4" }
     outline: { name: OUTLINE, lineweight: 0.7 }
     cutouts: { name: CUTOUTS, lineweight: 0.7 }
     axes: { name: AXES, lineweight: 0.35, linetype: DASHDOT }

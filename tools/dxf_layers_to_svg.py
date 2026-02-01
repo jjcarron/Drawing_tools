@@ -57,6 +57,17 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Export TEXT/MTEXT as <text> elements instead of paths.",
     )
+    parser.add_argument(
+        "--bounds-layer",
+        type=str,
+        default=None,
+        help="Layer name to use for SVG bounds (defaults to OUTLINE if present).",
+    )
+    parser.add_argument(
+        "--bounds-all",
+        action="store_true",
+        help="Use all DXF entities to compute SVG bounds.",
+    )
     return parser.parse_args()
 
 
@@ -84,13 +95,16 @@ def svg_coords(x: float, y: float, min_x: float, max_y: float) -> tuple[float, f
 
 def export_svg(
     entities: list[ezdxf.entities.DXFGraphic],
+    bounds_entities: list[ezdxf.entities.DXFGraphic],
     output_path: Path,
     config: SvgConfig,
     text_as_paths: bool,
 ) -> None:
     """Write SVG file with given entities."""
 
-    bounds = compute_bounds(entities)
+    bounds = compute_bounds(bounds_entities)
+    if not bounds.has_data:
+        bounds = compute_bounds(entities)
     if not bounds.has_data:
         raise ValueError("No geometry found for selected layers.")
 
@@ -212,8 +226,18 @@ def main() -> None:
     doc = ezdxf.readfile(dxf_path)
     msp = doc.modelspace()
     entities = collect_entities(msp, layers)
+    if args.bounds_all:
+        bounds_entities = [e for e in msp if isinstance(e, ezdxf.entities.DXFGraphic)]
+    else:
+        bounds_layer = args.bounds_layer
+        if bounds_layer is None and "OUTLINE" in doc.layers:
+            bounds_layer = "OUTLINE"
+        if bounds_layer:
+            bounds_entities = collect_entities(msp, {bounds_layer})
+        else:
+            bounds_entities = entities
     text_as_paths = not args.text_as_text
-    export_svg(entities, output_path, SvgConfig(), text_as_paths)
+    export_svg(entities, bounds_entities, output_path, SvgConfig(), text_as_paths)
 
     print(f"SVG written to: {output_path}")
 
