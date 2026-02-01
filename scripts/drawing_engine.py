@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any, Iterable
 
 import ezdxf
+from ezdxf import colors
 from ezdxf import bbox
 from ezdxf.enums import TextEntityAlignment
 from ezdxf.math import Vec2
@@ -29,6 +30,7 @@ class LayerConfig:
     name: str
     lineweight_mm: float
     linetype: str | None = None
+    color: str | None = None
 
 
 def to_lineweight_hundredths(lineweight_mm: float) -> int:
@@ -117,6 +119,52 @@ def _add_panel_outline(
         [(0.0, 0.0), (length, 0.0), (length, width), (0.0, width), (0.0, 0.0)],
         dxfattribs={"layer": layer_name},
         close=False,
+    )
+
+
+def _parse_true_color(color: str | tuple[int, int, int] | list[int]) -> int:
+    """Convert a color value to DXF true color integer."""
+
+    if isinstance(color, (tuple, list)):
+        if len(color) != 3:
+            raise ValueError(f"Invalid color tuple: {color}")
+        return colors.rgb2int((int(color[0]), int(color[1]), int(color[2])))
+
+    value = str(color).strip()
+    if value.startswith("#"):
+        value = value[1:]
+        if len(value) != 6:
+            raise ValueError(f"Invalid color: #{value}")
+        r = int(value[0:2], 16)
+        g = int(value[2:4], 16)
+        b = int(value[4:6], 16)
+        return colors.rgb2int((r, g, b))
+
+    if "," in value:
+        parts = [p.strip() for p in value.split(",")]
+        if len(parts) != 3:
+            raise ValueError(f"Invalid color: {color}")
+        return colors.rgb2int((int(parts[0]), int(parts[1]), int(parts[2])))
+
+    raise ValueError(f"Invalid color: {color}")
+
+
+def _add_background(
+    msp: ezdxf.layouts.Modelspace,
+    length: float,
+    width: float,
+    layer: LayerConfig,
+) -> None:
+    """Add a solid hatch background following the outline."""
+
+    hatch = msp.add_hatch(color=256)
+    hatch.dxf.layer = layer.name
+    hatch.set_solid_fill(True)
+    # Keep hatch BYLAYER so changing the layer color updates the fill.
+    hatch.dxf.color = 256
+    hatch.paths.add_polyline_path(
+        [(0.0, 0.0), (length, 0.0), (length, width), (0.0, width), (0.0, 0.0)],
+        is_closed=True,
     )
 
 
@@ -617,6 +665,8 @@ def render_from_spec(spec: dict[str, Any], output_path: Path, template_override:
     template_value = _get_nested(spec, ["sheet", "template"], "")
     template_path = template_override or (Path(template_value) if template_value else None)
     doc, existing_handles = load_template(template_path if template_path else None)
+    # Ensure DXF version supports true color (AC1018+); use R2010 for compatibility.
+    doc.dxfversion = "R2010"
     if template_override and template_path and not template_path.exists():
         print(f"Template not found, using blank DXF: {template_path}")
 
@@ -624,6 +674,14 @@ def render_from_spec(spec: dict[str, Any], output_path: Path, template_override:
     doc.header["$LTSCALE"] = 1.0
 
     layers_spec = _get_nested(spec, ["styles", "layers"], {})
+    background_layer = None
+    if "background" in layers_spec:
+        background_layer = LayerConfig(
+            name=layers_spec.get("background", {}).get("name", "BACKGROUND"),
+            lineweight_mm=float(layers_spec.get("background", {}).get("lineweight", 0.0)),
+            color=layers_spec.get("background", {}).get("color"),
+        )
+
     outline_layer = LayerConfig(
         name=layers_spec.get("outline", {}).get("name", "OUTLINE"),
         lineweight_mm=float(layers_spec.get("outline", {}).get("lineweight", 0.7)),
@@ -656,14 +714,19 @@ def render_from_spec(spec: dict[str, Any], output_path: Path, template_override:
             l.dxf.lineweight = lineweight
             if layer.linetype:
                 l.dxf.linetype = layer.linetype
+            if layer.color:
+                l.dxf.true_color = _parse_true_color(layer.color)
         else:
             attribs: dict[str, Any] = {"lineweight": lineweight}
             if layer.linetype:
                 attribs["linetype"] = layer.linetype
+            if layer.color:
+                attribs["true_color"] = _parse_true_color(layer.color)
             doc.layers.add(layer.name, **attribs)
 
-    for layer in (outline_layer, cutout_layer, axis_layer, dim_layer, text_layer):
-        ensure_layer(layer)
+    for layer in (background_layer, outline_layer, cutout_layer, axis_layer, dim_layer, text_layer):
+        if layer is not None:
+            ensure_layer(layer)
 
     text_style_name = "LABEL"
     text_font = _get_nested(spec, ["styles", "text", "font"], "Segoe UI Semibold")
@@ -677,6 +740,8 @@ def render_from_spec(spec: dict[str, Any], output_path: Path, template_override:
     panel_width = float(_get_nested(spec, ["panel", "size", "width"]))
 
     msp = doc.modelspace()
+    if background_layer is not None:
+        _add_background(msp, panel_length, panel_width, background_layer)
     _add_panel_outline(msp, outline_layer.name, panel_length, panel_width)
     openings = _add_openings(msp, spec, panel_length, panel_width, cutout_layer.name)
 

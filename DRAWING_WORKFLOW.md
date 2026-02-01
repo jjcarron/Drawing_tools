@@ -91,6 +91,22 @@ openings:
 - `rect`: width + height + center
 - `notch_u`: height + `from_left` + `to_x` or `to_x_ref` (open‑left U)
 
+## Background Layer (Optional)
+You can add a solid background fill that follows the outline using a dedicated
+`BACKGROUND` layer. This is useful for printing colored panels.
+
+YAML example:
+```
+styles:
+  layers:
+    background: { name: BACKGROUND, lineweight: 0.0, color: "#dadada" }
+```
+
+Notes:
+- The background is rendered as a solid HATCH on the `BACKGROUND` layer.
+- The color is a true color; you can use `#RRGGBB` or `r,g,b`.
+- The hatch is BYLAYER, so changing the layer color in CAD updates the fill.
+
 ## Supported Dimension Types
 - `overall_length`
 - `overall_width`
