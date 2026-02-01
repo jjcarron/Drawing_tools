@@ -1,0 +1,106 @@
+meta:
+  filename: GBS-8200_Ground_Plane
+  version: 0.1
+  units: mm
+
+sheet:
+  template: templates/A4_Landscape_ISO5457_minimal.dxf
+  free_area:
+    top: 200
+    bottom: 60
+    left: 0
+    right: 297
+  center:
+    mode: free_area
+    round_to_mm: true
+
+styles:
+  layers:
+    outline: { name: OUTLINE, lineweight: 0.7 }
+    cutouts: { name: CUTOUTS, lineweight: 0.7 }
+    axes: { name: AXES, lineweight: 0.35, linetype: DASHDOT }
+    dimensions: { name: DIMENSIONS, lineweight: 0.35 }
+    text: { name: TEXT, lineweight: 0.35 }
+  text:
+    font: "Segoe UI Semibold"
+    height_pt: 9
+  dimensions:
+    style: ISO-25
+    offset: 7
+    spacing: 5
+    small_hole_outside_threshold: 6
+
+panel:
+  size:
+    length: 150
+    width: 120
+    thickness: 3
+
+axes:
+  center:
+    horizontal: true
+    vertical: true
+  openings:
+    circles: true
+  overhang: 2
+  extend_to_dimensions: true
+
+openings:
+  - id: hole1
+    type: circle
+    diameter: 3.5
+    center:
+      x_from_center: -55
+      y_from_center: 47
+  - id: hole2
+    type: circle
+    diameter: 3.5
+    center:
+      x_from_center: -55
+      y_from_center: -47
+  - id: hole3
+    type: circle
+    diameter: 3.5
+    center:
+      x_from_center: 55
+      y_from_center: -47
+  - id: hole4
+    type: circle
+    diameter: 3.5
+    center:
+      x_from_center: 55
+      y_from_center: 47
+
+dimensions:
+  items:
+    - type: overall_length
+      value: 150
+      where: down
+      distance: 7
+    - type: overall_width
+      value: 120
+      where: left
+      distance: 7
+    - type: offset_from_center_x
+      targets: [hole4]
+      where: up
+      distance: 7
+    - type: offset_from_center_y
+      targets: [hole4]
+      where: right
+      distance: 7
+    - type: diameter
+      target: hole1
+      value: 3.5
+
+text:
+  items: []
+
+title_block:
+  apply: true
+  fields:
+    Title: "GBS-8200_Ground_Plane"
+    Document Type: "Case Part"
+    Drawing number: "20260131-03"
+    Issue date: "DD.MM.YYYY"
+    Material: "Plastic ABS"

@@ -1,0 +1,107 @@
+meta:
+  filename: GBS-8200_Front_Panel
+  version: 0.1
+  units: mm
+
+sheet:
+  template: templates/A4_Landscape_ISO5457_minimal.dxf
+  free_area:
+    top: 200
+    bottom: 60
+    left: 0
+    right: 297
+  center:
+    mode: free_area
+    round_to_mm: true
+
+styles:
+  layers:
+    outline: { name: OUTLINE, lineweight: 0.7 }
+    cutouts: { name: CUTOUTS, lineweight: 0.7 }
+    axes: { name: AXES, lineweight: 0.35, linetype: DASHDOT }
+    dimensions: { name: DIMENSIONS, lineweight: 0.35 }
+    text: { name: TEXT, lineweight: 0.35 }
+  text:
+    font: "Segoe UI Semibold"
+    height_pt: 9
+  dimensions:
+    style: ISO-25
+    offset: 8
+    spacing: 5
+    small_hole_outside_threshold: 6
+
+panel:
+  size:
+    length: 147
+    width: 37
+    thickness: 3
+
+axes:
+  center:
+    horizontal: true
+    vertical: true
+  openings:
+    circles: true
+    rects: true
+  overhang: 2
+  extend_to_dimensions: true
+
+openings:
+  - id: circle1
+    type: circle
+    diameter: 8
+    center:
+      x_from_center: -41.5
+      y_from_center: 0
+  - id: rect1
+    type: rect
+    width: 31
+    height: 11
+    center:
+      x_from_center: 33
+      y_from_center: 0
+
+dimensions:
+  items:
+    - type: overall_length
+      value: 147
+    - type: overall_width
+      value: 37
+    - type: diameter
+      target: circle1
+      value: 8
+    - type: rect_width
+      target: rect1
+      value: 31
+    - type: rect_height
+      target: rect1
+      value: 11
+    - type: offset_from_center_x
+      targets: [circle1, rect1]
+
+text:
+  items:
+    - value: GBS-8200
+      align: top_right
+      at:
+        x_from_right: 6
+        y_from_top: 6
+    - value: VGA-Out
+      align: center
+      at:
+        x_ref: rect1.center.x
+        y_from_bottom: 6
+    - value: 5-12V -(o+
+      align: center
+      at:
+        x_ref: circle1.center.x
+        y_from_bottom: 6
+
+title_block:
+  apply: true
+  fields:
+    Title: "GBS-8200_Front_Panel"
+    Document Type: "Case Part"
+    Drawing number: "20260131-01"
+    Issue date: "DD.MM.YYYY"
+    Material: "Plastic ABS"

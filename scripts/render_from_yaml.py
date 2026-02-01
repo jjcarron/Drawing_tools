@@ -1,4 +1,4 @@
-"""Render the GBS-8200 back panel from YAML."""
+"""Render a DXF drawing from a YAML specification."""
 
 from __future__ import annotations
 
@@ -9,19 +9,11 @@ from drawing_engine import render_from_spec
 from yaml_spec import load_spec
 
 
-DEFAULT_SPEC = Path("projets/GBS-8200/GBS-8200_Back_Panel.yml")
-
-
 def parse_args() -> argparse.Namespace:
     """Parse CLI arguments."""
 
-    parser = argparse.ArgumentParser(description="Render the GBS-8200 back panel DXF.")
-    parser.add_argument(
-        "--spec",
-        type=Path,
-        default=DEFAULT_SPEC,
-        help="YAML specification file.",
-    )
+    parser = argparse.ArgumentParser(description="Render a DXF drawing from a YAML spec.")
+    parser.add_argument("--spec", type=Path, required=True, help="YAML specification file.")
     parser.add_argument(
         "--output",
         type=Path,

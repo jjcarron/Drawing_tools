@@ -1,0 +1,153 @@
+meta:
+  filename: GBS-8200_Back_Panel
+  version: 0.1
+  units: mm
+
+sheet:
+  template: templates/A4_Landscape_ISO5457_minimal.dxf
+  free_area:
+    top: 200
+    bottom: 60
+    left: 0
+    right: 297
+  center:
+    mode: free_area
+    round_to_mm: true
+
+styles:
+  layers:
+    outline: { name: OUTLINE, lineweight: 0.7 }
+    cutouts: { name: CUTOUTS, lineweight: 0.7 }
+    axes: { name: AXES, lineweight: 0.35, linetype: DASHDOT }
+    dimensions: { name: DIMENSIONS, lineweight: 0.35 }
+    text: { name: TEXT, lineweight: 0.35 }
+  text:
+    font: "Segoe UI Semibold"
+    height_pt: 9
+  dimensions:
+    style: ISO-25
+    offset: 7
+    spacing: 5
+    small_hole_outside_threshold: 6
+
+panel:
+  size:
+    length: 147
+    width: 37
+    thickness: 3
+
+axes:
+  center:
+    horizontal: true
+    vertical: true
+  openings:
+    circles: true
+    rects: true
+  overhang: 2
+  extend_to_dimensions: true
+
+openings:
+  - id: hole1
+    type: circle
+    diameter: 10
+    center:
+      x_from_center: -5
+      y_from_center: 0
+  - id: hole2
+    type: circle
+    diameter: 10
+    center:
+      x_from_center: 9
+      y_from_center: 0
+  - id: hole3
+    type: circle
+    diameter: 10
+    center:
+      x_from_center: 23
+      y_from_center: 0
+  - id: hole4
+    type: circle
+    diameter: 5
+    center:
+      x_from_left: 10
+      y_from_center: 0
+  - id: notch_u
+    type: notch_u
+    height: 3
+    from_left: 0
+    to_x_ref: hole4.center.x
+    centered_on_y: true
+  - id: rect1
+    type: rect
+    width: 31
+    height: 11
+    center:
+      x_from_center: -30
+      y_from_center: 0
+
+dimensions:
+  items:
+    - type: overall_length
+      value: 147
+    - type: overall_width
+      value: 37
+    - type: diameter
+      target: hole3
+      value: 10
+    - type: diameter
+      target: hole4
+      value: 5
+    - type: rect_width
+      target: rect1
+      value: 31
+      where: down
+      distance: 7
+    - type: rect_height
+      target: rect1
+      value: 11
+      where: left
+      distance: 7
+    - type: offset_from_center_x
+      targets: [hole1, hole3]
+      where: up
+      distance: 7
+    - type: offset_from_center_x
+      targets: [hole2]
+      where: down
+      distance: 7
+    - type: offset_from_left
+      target: hole4
+      where: up
+      distance: 7
+
+text:
+  items:
+    - value: RGBHV
+      align: center
+      at:
+        x_ref: rect1.center.x
+        y_from_bottom: 6
+    - value: Y
+      align: center
+      at:
+        x_ref: hole1.center.x
+        y_from_bottom: 6
+    - value: Pb
+      align: center
+      at:
+        x_ref: hole2.center.x
+        y_from_bottom: 6
+    - value: Pr
+      align: center
+      at:
+        x_ref: hole3.center.x
+        y_from_bottom: 6
+
+title_block:
+  apply: true
+  fields:
+    Title: "GBS-8200_Back_Panel"
+    Document Type: "Case Part"
+    Drawing number: "20260131-01"
+    Issue date: "DD.MM.YYYY"
+    Material: "Plastic ABS"

@@ -50,3 +50,4 @@
 48. Updated hole axes to short crosshairs (2 mm past hole edges) and extended axes when associated dimensions require it for back/ground panels.
 49. Adjusted dimension placement to measure offsets from the referenced hole (radius + distance) and kept dimensions bylayer for consistent line weights.
 50. Corrected hole axis extents to 2 mm past hole edges and tied axis extensions to dimension locations for back and ground panels.
+51. Introduced YAML-based specs and a generic renderer (drawing_engine + render_from_yaml), with per-panel scripts loading YAML specs.
